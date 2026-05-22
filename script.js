@@ -73,14 +73,9 @@ let carMarker = null;
 let activeDay = null;
 let timelineVisible = true;
 let isMobile = window.innerWidth <= 768;
-
-const TOUR_PATH = [...ROUTE_A_COORDS, ...ROUTE_B_COORDS.slice(1)];
-let tourAnimId = null;
-let tourProgress = 0;
-let tourRunning = false;
-let tourPaused = false;
-let tourLastTime = 0;
-const TOUR_DURATION = 30000;
+let gpsWatchId = null;
+let gpsTracking = false;
+let gpsAccuracy = null;
 
 function createMarkerIcon(color) {
   return L.divIcon({
@@ -200,144 +195,114 @@ function addMarkers() {
 }
 
 function initCar() {
-  carMarker = L.marker(TOUR_PATH[0], {
+  carMarker = L.marker([52.3010, -0.6940], {
     icon: createCarIcon(),
     zIndexOffset: 10000,
   }).addTo(map);
 }
 
-function getPositionOnPath(progress) {
-  const total = TOUR_PATH.length - 1;
-  const idx = progress * total;
-  const i = Math.min(Math.floor(idx), total - 1);
-  const t = idx - i;
-  const p1 = TOUR_PATH[i];
-  const p2 = TOUR_PATH[Math.min(i + 1, total)];
-  return [
-    p1[0] + (p2[0] - p1[0]) * t,
-    p1[1] + (p2[1] - p1[1]) * t,
-  ];
+function findClosestRoutePoint(lat, lng) {
+  const allCoords = [...ROUTE_A_COORDS, ...ROUTE_B_COORDS.slice(1)];
+  let minDist = Infinity;
+  let closestIdx = 0;
+  allCoords.forEach((c, i) => {
+    const d = Math.sqrt((c[0] - lat) ** 2 + (c[1] - lng) ** 2);
+    if (d < minDist) { minDist = d; closestIdx = i; }
+  });
+  return { index: closestIdx, distance: minDist };
 }
 
-function getCurrentDayIndex(progress) {
+function getDayFromRouteIndex(routeIdx) {
+  const allCoords = [...ROUTE_A_COORDS, ...ROUTE_B_COORDS.slice(1)];
+  const progress = routeIdx / (allCoords.length - 1);
   const segCount = DAYS.length;
   const segProgress = progress * segCount;
-  const idx = Math.min(Math.floor(segProgress), segCount - 1);
-  return Math.max(0, idx);
+  return Math.min(Math.max(0, Math.floor(segProgress)), DAYS.length - 1);
 }
 
-function updateTourUI(progress) {
-  const dayIdx = getCurrentDayIndex(progress);
-  const day = DAYS[dayIdx];
-  const pct = Math.round(progress * 100);
-
+function updateGPSUI(lat, lng, accuracy) {
   const info = document.getElementById('tour-info');
-  if (info && day) {
-    info.innerHTML = `<span class="tour-location">${day.name}</span><span class="tour-pct">${pct}%</span>`;
+  if (info) {
+    const pct = accuracy ? Math.round(accuracy) + 'm' : '...';
+    info.innerHTML = `<span class="tour-location">${lat.toFixed(4)}, ${lng.toFixed(4)}</span><span class="tour-pct">±${pct}</span>`;
   }
 
   const bar = document.getElementById('tour-progress-bar');
-  if (bar) bar.style.width = pct + '%';
+  if (bar) bar.style.width = '100%';
+
+  const allCoords = [...ROUTE_A_COORDS, ...ROUTE_B_COORDS.slice(1)];
+  const closest = findClosestRoutePoint(lat, lng);
+  const dayIdx = getDayFromRouteIndex(closest.index);
 
   DAYS.forEach((d, i) => {
     const card = document.querySelector(`.day-card[data-day="${i}"]`);
     if (card) card.classList.toggle('active', i === dayIdx);
   });
   highlightRouteSegment(dayIdx);
+
+  const gpsDot = document.getElementById('gps-accuracy');
+  if (gpsDot && accuracy) {
+    gpsDot.textContent = accuracy < 50 ? 'High' : accuracy < 150 ? 'Medium' : 'Low';
+  }
 }
 
-function animateTour(timestamp) {
-  if (!tourRunning || tourPaused) {
-    tourAnimId = null;
-    return;
-  }
-
-  if (!tourLastTime) tourLastTime = timestamp;
-  const dt = timestamp - tourLastTime;
-  tourLastTime = timestamp;
-
-  tourProgress += dt / TOUR_DURATION;
-
-  if (tourProgress >= 1) {
-    tourProgress = 1;
-    const pos = getPositionOnPath(1);
-    carMarker.setLatLng(pos);
-    updateTourUI(1);
-    stopTour();
-    return;
-  }
-
-  const pos = getPositionOnPath(tourProgress);
-  carMarker.setLatLng(pos);
-  updateTourUI(tourProgress);
-
-  map.panTo(pos, { animate: true, duration: 0.3 });
-
-  tourAnimId = requestAnimationFrame(animateTour);
+function gpsSuccess(pos) {
+  const { latitude, longitude, accuracy } = pos.coords;
+  gpsAccuracy = accuracy;
+  carMarker.setLatLng([latitude, longitude]);
+  updateGPSUI(latitude, longitude, accuracy);
+  map.panTo([latitude, longitude], { animate: true, duration: 0.5 });
 }
 
-function startTour() {
-  if (tourRunning && !tourPaused) return;
-  if (tourProgress >= 1) {
-    tourProgress = 0;
-  }
-  tourRunning = true;
-  tourPaused = false;
-  tourLastTime = 0;
-
+function gpsError(err) {
   const btn = document.getElementById('tour-btn');
-  if (btn) {
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="4" y="2" width="2" height="10" rx="1" fill="white"/><rect x="8" y="2" width="2" height="10" rx="1" fill="white"/></svg>';
-    btn.title = 'Pause';
-  }
-
-  if (tourAnimId) cancelAnimationFrame(tourAnimId);
-  tourAnimId = requestAnimationFrame(animateTour);
-}
-
-function pauseTour() {
-  if (!tourRunning) return;
-  tourPaused = !tourPaused;
-  if (tourPaused) {
-    if (tourAnimId) cancelAnimationFrame(tourAnimId);
-    tourAnimId = null;
-    const btn = document.getElementById('tour-btn');
-    if (btn) {
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-      btn.title = 'Resume';
-    }
-  } else {
-    tourLastTime = 0;
-    tourAnimId = requestAnimationFrame(animateTour);
-    const btn = document.getElementById('tour-btn');
-    if (btn) {
-      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="4" y="2" width="2" height="10" rx="1" fill="white"/><rect x="8" y="2" width="2" height="10" rx="1" fill="white"/></svg>';
-      btn.title = 'Pause';
-    }
-  }
-}
-
-function stopTour() {
-  tourRunning = false;
-  tourPaused = false;
-  if (tourAnimId) {
-    cancelAnimationFrame(tourAnimId);
-    tourAnimId = null;
-  }
-  const btn = document.getElementById('tour-btn');
-  if (btn) {
+  const info = document.getElementById('tour-info');
+  if (err.code === 1) {
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-    btn.title = 'Replay';
+    btn.title = 'Retry';
+    if (info) info.innerHTML = '<span class="tour-location">GPS blocked</span><span class="tour-pct">Allow location</span>';
+  } else {
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
+    btn.title = 'Retry';
+    if (info) info.innerHTML = `<span class="tour-location">GPS error</span><span class="tour-pct">${err.message}</span>`;
   }
+  gpsTracking = false;
 }
 
-function resetTour() {
-  stopTour();
-  tourProgress = 0;
-  const pos = TOUR_PATH[0];
-  carMarker.setLatLng(pos);
-  updateTourUI(0);
-  map.panTo(pos, { animate: true, duration: 0.6 });
+function startGPSTracking() {
+  if (!navigator.geolocation) {
+    const info = document.getElementById('tour-info');
+    if (info) info.innerHTML = '<span class="tour-location">GPS not available</span>';
+    return;
+  }
+
+  const btn = document.getElementById('tour-btn');
+  btn.innerHTML = '<div class="gps-pulse"></div>';
+  btn.title = 'Tracking GPS...';
+  const info = document.getElementById('tour-info');
+  if (info) info.innerHTML = '<span class="tour-location">Requesting GPS...</span>';
+
+  gpsWatchId = navigator.geolocation.watchPosition(gpsSuccess, gpsError, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 5000,
+  });
+  gpsTracking = true;
+}
+
+function stopGPSTracking() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  gpsTracking = false;
+  const btn = document.getElementById('tour-btn');
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
+  btn.title = 'Start GPS';
+  const info = document.getElementById('tour-info');
+  if (info) info.innerHTML = '<span class="tour-location">GPS off</span>';
+  const bar = document.getElementById('tour-progress-bar');
+  if (bar) bar.style.width = '0%';
 }
 
 function showModal(dayIndex) {
@@ -597,13 +562,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const tourBtn = document.getElementById('tour-btn');
   if (tourBtn) {
     tourBtn.addEventListener('click', () => {
-      if (!tourRunning) {
-        if (tourProgress >= 1) resetTour();
-        setTimeout(startTour, 300);
-      } else if (tourPaused) {
-        pauseTour();
+      if (gpsTracking) {
+        stopGPSTracking();
       } else {
-        pauseTour();
+        startGPSTracking();
       }
     });
   }

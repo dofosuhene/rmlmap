@@ -299,6 +299,19 @@ html, body {
   transform: scale(0.95);
 }
 
+.gps-pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4CAF50;
+  animation: gps-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes gps-blink {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
+}
+
 .tour-info {
   display: flex;
   flex-direction: column;
