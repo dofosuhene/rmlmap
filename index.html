@@ -58,18 +58,14 @@
           <button id="follow-btn" class="tool-btn active" title="Auto-follow">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
           </button>
-          <button id="broadcast-btn" class="tool-btn" title="Broadcast your location">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          </button>
         </div>
-        <div class="toolbar-divider"></div>
-        <button id="tour-btn" class="tool-btn gps-btn" title="Your location">
-          <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="currentColor"/></svg>
-        </button>
-        <div id="tour-info" class="gps-info">GPS off</div>
         <button id="timeline-close" class="tool-btn close-btn" aria-label="Close">&times;</button>
       </div>
     </div>
+    <button id="broadcast-btn" class="broadcast-bar-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <span id="bc-btn-label">Broadcast Location</span>
+    </button>
 
     <div id="live-stats" class="live-stats hidden">
       <span id="stat-driver"></span>

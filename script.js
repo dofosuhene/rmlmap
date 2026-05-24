@@ -73,9 +73,6 @@ let carMarker = null;
 let activeDay = null;
 let timelineVisible = true;
 let isMobile = window.innerWidth <= 768;
-let gpsWatchId = null;
-let gpsTracking = false;
-let gpsAccuracy = null;
 let supabaseClient = null;
 let broadcastActive = false;
 let broadcastData = null;
@@ -99,13 +96,11 @@ function createMarkerIcon(color) {
 }
 
 function createCarIcon() {
-  let html = `<div class="car-marker-float"><div class="car-marker-rotate"><svg viewBox="0 0 40 24" style="pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6))"><rect x="2" y="8" width="36" height="12" rx="4" fill="#C8102E"/><rect x="8" y="2" width="24" height="10" rx="3" fill="#E31837"/><circle cx="10" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><circle cx="30" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><rect x="16" y="5" width="8" height="5" rx="1" fill="#fff" opacity="0.3"/></svg></div></div>`;
-
   return L.divIcon({
     className: 'car-marker',
-    html: html,
-    iconSize: [40, 28],
-    iconAnchor: [20, 14],
+    html: `<div class="car-marker-float"><div class="car-marker-rotate"><svg viewBox="0 0 40 24" style="pointer-events:none"><rect x="2" y="8" width="36" height="12" rx="4" fill="#C8102E"/><rect x="8" y="2" width="24" height="10" rx="3" fill="#E31837"/><circle cx="10" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><circle cx="30" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><rect x="16" y="5" width="8" height="5" rx="1" fill="#fff" opacity="0.3"/></svg></div></div>`,
+    iconSize: [40, 24],
+    iconAnchor: [20, 12],
   });
 }
 
@@ -201,10 +196,12 @@ function addMarkers() {
 }
 
 function initCar() {
-  carMarker = L.marker([52.3010, -0.6940], {
-    icon: createCarIcon(),
-    zIndexOffset: 10000,
-  }).addTo(map);
+  if (!carMarker) {
+    carMarker = L.marker([52.3010, -0.6940], {
+      icon: createCarIcon(),
+      zIndexOffset: 10000,
+    }).addTo(map);
+  }
 }
 
 function findClosestRoutePoint(lat, lng) {
@@ -224,83 +221,6 @@ function getDayFromRouteIndex(routeIdx) {
   const segCount = DAYS.length;
   const segProgress = progress * segCount;
   return Math.min(Math.max(0, Math.floor(segProgress)), DAYS.length - 1);
-}
-
-function updateGPSUI(lat, lng, accuracy) {
-  if (broadcastActive) return;
-  const info = document.getElementById('tour-info');
-  if (info) {
-    const pct = accuracy ? Math.round(accuracy) + 'm' : '...';
-    info.innerHTML = `<span class="gps-coords">${lat.toFixed(4)}, ${lng.toFixed(4)}</span><span class="gps-meta">±${pct}</span>`;
-  }
-
-  const bar = document.getElementById('tour-progress-bar');
-  if (bar) bar.style.width = '100%';
-
-  const allCoords = [...ROUTE_A_COORDS, ...ROUTE_B_COORDS.slice(1)];
-  const closest = findClosestRoutePoint(lat, lng);
-  const dayIdx = getDayFromRouteIndex(closest.index);
-
-  DAYS.forEach((d, i) => {
-    const card = document.querySelector(`.day-card[data-day="${i}"]`);
-    if (card) card.classList.toggle('active', i === dayIdx);
-  });
-  highlightRouteSegment(dayIdx);
-}
-
-function gpsSuccess(pos) {
-  if (broadcastActive) return; // broadcast car takes priority
-  const { latitude, longitude, accuracy } = pos.coords;
-  gpsAccuracy = accuracy;
-  carMarker.setLatLng([latitude, longitude]);
-  updateGPSUI(latitude, longitude, accuracy);
-  map.panTo([latitude, longitude], { animate: true, duration: 0.5 });
-}
-
-function gpsError(err) {
-  const btn = document.getElementById('tour-btn');
-  const info = document.getElementById('tour-info');
-  const msg = err.code === 1 ? 'GPS blocked · Allow location' : `GPS error · ${err.message}`;
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-  btn.title = 'Retry';
-  if (info) info.innerHTML = `<span class="gps-coords">${msg}</span>`;
-  gpsTracking = false;
-}
-
-function startGPSTracking() {
-  if (!navigator.geolocation) {
-    const info = document.getElementById('tour-info');
-    if (info) info.innerHTML = '<span class="gps-coords">GPS not available</span>';
-    return;
-  }
-
-  const btn = document.getElementById('tour-btn');
-  btn.innerHTML = '<div class="gps-pulse"></div>';
-  btn.title = 'Tracking GPS...';
-  const info = document.getElementById('tour-info');
-  if (info) info.innerHTML = '<span class="gps-coords">Requesting GPS...</span>';
-
-  gpsWatchId = navigator.geolocation.watchPosition(gpsSuccess, gpsError, {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 5000,
-  });
-  gpsTracking = true;
-}
-
-function stopGPSTracking() {
-  if (gpsWatchId !== null) {
-    navigator.geolocation.clearWatch(gpsWatchId);
-    gpsWatchId = null;
-  }
-  gpsTracking = false;
-  const btn = document.getElementById('tour-btn');
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="currentColor"/></svg>';
-  btn.title = 'Your location';
-  const info = document.getElementById('tour-info');
-  if (info) info.innerHTML = '<span class="gps-coords">GPS off</span>';
-  const bar = document.getElementById('tour-progress-bar');
-  if (bar) bar.style.width = '0%';
 }
 
 function showModal(dayIndex) {
@@ -746,7 +666,7 @@ function startBroadcast() {
   document.getElementById('broadcast-active-view').classList.remove('hidden');
   document.getElementById('broadcast-name-display').textContent = name;
   document.getElementById('broadcast-btn').classList.add('active');
-  document.getElementById('broadcast-btn').title = 'Stop broadcasting';
+  document.getElementById('bc-btn-label').textContent = 'Stop Broadcast';
   showBroadcastPanel();
 }
 
@@ -761,7 +681,7 @@ function stopBroadcast() {
   document.getElementById('broadcast-form-view').classList.remove('hidden');
   document.getElementById('broadcast-active-view').classList.add('hidden');
   document.getElementById('broadcast-btn').classList.remove('active');
-  document.getElementById('broadcast-btn').title = 'Broadcast your location';
+  document.getElementById('bc-btn-label').textContent = 'Broadcast Location';
 
   if (supabaseClient) {
     supabaseClient
@@ -827,17 +747,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('timeline-close').addEventListener('click', closeTimeline);
   document.getElementById('timeline-toggle').addEventListener('click', toggleTimeline);
-
-  const tourBtn = document.getElementById('tour-btn');
-  if (tourBtn) {
-    tourBtn.addEventListener('click', () => {
-      if (gpsTracking) {
-        stopGPSTracking();
-      } else {
-        startGPSTracking();
-      }
-    });
-  }
 
   const shareBtn = document.getElementById('live-share-btn');
   if (shareBtn) {
