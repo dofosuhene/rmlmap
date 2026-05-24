@@ -142,9 +142,13 @@ html, body {
 }
 
 .brand-logo-img {
-  display: none;
+  display: block;
   max-height: 32px;
   width: auto;
+}
+
+.brand-shield {
+  display: none;
 }
 
 .brand-text {

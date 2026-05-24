@@ -505,18 +505,41 @@ function handleLocationUpdate(payload) {
 }
 
 function handleLocationData(data) {
-  if (!data || !data.broadcasting) {
-    hideLiveBadge();
-    hideLiveStats();
+  if (!data || (!data.lat && !data.lng)) return;
+
+  if (!data.broadcasting) {
+    if (!broadcastData) {
+      broadcastData = data;
+    }
     broadcastActive = false;
+
+    const badge = document.getElementById('live-badge');
+    if (badge) {
+      badge.classList.remove('hidden');
+      badge.classList.add('ended');
+      badge.querySelector('.live-dot').style.background = 'var(--color-text-muted)';
+      badge.querySelector('.live-dot').style.boxShadow = 'none';
+      badge.querySelector('.live-label').textContent = 'ENDED';
+    }
+
+    const stats = document.getElementById('live-stats');
+    if (stats) stats.classList.remove('hidden');
+
     return;
   }
 
   broadcastData = data;
   broadcastActive = true;
 
-  showLiveBadge(data.driver_name);
-  updateLiveStats(data);
+  const badge = document.getElementById('live-badge');
+  if (badge) {
+    badge.classList.remove('hidden', 'ended');
+    badge.querySelector('.live-dot').style.background = '';
+    badge.querySelector('.live-dot').style.boxShadow = '';
+    badge.querySelector('.live-label').textContent = 'LIVE';
+  }
+
+  showLiveStats(data);
   startCarAnimation();
   startLastSeenTimer(data);
   updateCarHeading(data.heading);
@@ -570,24 +593,7 @@ function updateCarHeading(heading) {
   if (rotateEl) rotateEl.style.transform = `rotate(${heading - 90}deg)`;
 }
 
-function showLiveBadge(driverName) {
-  const badge = document.getElementById('live-badge');
-  if (badge) badge.classList.remove('hidden');
-  const stats = document.getElementById('live-stats');
-  if (stats) stats.classList.remove('hidden');
-}
-
-function hideLiveBadge() {
-  const badge = document.getElementById('live-badge');
-  if (badge) badge.classList.add('hidden');
-}
-
-function hideLiveStats() {
-  const stats = document.getElementById('live-stats');
-  if (stats) stats.classList.add('hidden');
-}
-
-function updateLiveStats(data) {
+function showLiveStats(data) {
   const driverEl = document.getElementById('stat-driver');
   const speedEl = document.getElementById('stat-speed');
   const updatedEl = document.getElementById('stat-updated');
@@ -702,10 +708,9 @@ function sendBroadcastLocation(pos) {
   const { latitude, longitude, accuracy, heading, speed } = pos.coords;
   const name = document.getElementById('broadcast-name').value.trim() || 'Driver';
   const tourDay = parseInt(document.getElementById('broadcast-day').value);
-  const status = document.getElementById('broadcast-status').value;
+  const description = document.getElementById('broadcast-status').value.trim();
 
-  document.getElementById('broadcast-active-meta').textContent =
-    `${latitude.toFixed(4)}, ${longitude.toFixed(4)} · ${speed ? Math.round(speed * 3.6) + ' km/h' : '0 km/h'}`;
+  document.getElementById('broadcast-active-meta').textContent = `${latitude.toFixed(4)}, ${longitude.toFixed(4)} · ${speed ? Math.round(speed * 3.6) + ' km/h' : '0 km/h'}${description ? ' · “' + description + '”' : ''}`;
 
   supabaseClient
     .from('locations')
@@ -719,7 +724,7 @@ function sendBroadcastLocation(pos) {
       speed: speed || null,
       timestamp: new Date().toISOString(),
       tour_day: tourDay,
-      status: status,
+      status: description || 'driving',
       broadcasting: true,
     })
     .then(({ error }) => {
