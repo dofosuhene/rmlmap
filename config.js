@@ -1,7 +1,7 @@
 const CONFIG = {
   supabase: {
-    url: '',
-    anonKey: '',
+    url: 'https://fhdzotjkvjbyoboeruox.supabase.co',
+    anonKey: 'sb_publishable_L6KI38HTGlQhFs-qpIqyZA_i6tOoMPm',
   },
   admin: {
     password: 'rml-admin-2025',

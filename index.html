@@ -3,78 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>RML Group - The Grand Tour</title>
+  <title>RML Group — The Grand Tour</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Brand — always visible -->
   <div id="branding">
-    <div class="brand-logo">
-      <img src="logo.png" alt="RML Group" class="logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
-      <svg viewBox="0 0 48 48" class="shield-icon" style="display:none">
-        <path d="M24 2L4 12v10c0 14.3 8.6 22.5 20 26 11.4-3.5 20-11.7 20-26V12L24 2z" fill="#141414" stroke="#C8102E" stroke-width="1.8"/>
-        <text x="24" y="22" text-anchor="middle" fill="#C8102E" font-size="10" font-weight="700" font-family="Inter,sans-serif">RML</text>
-        <text x="24" y="34" text-anchor="middle" fill="#fff" font-size="5" font-weight="600" font-family="Inter,sans-serif">GROUP</text>
-      </svg>
-      <div class="brand-text">
-        <span class="brand-title">The Grand Tour</span>
-        <span class="brand-subtitle">HQ to Motor Valley</span>
+    <div class="brand">
+      <div class="brand-shield">
+        <svg viewBox="0 0 48 48" width="36" height="36">
+          <path d="M24 2L4 12v10c0 14.3 8.6 22.5 20 26 11.4-3.5 20-11.7 20-26V12L24 2z" fill="none" stroke="#C8102E" stroke-width="1.8"/>
+          <text x="24" y="22" text-anchor="middle" fill="#C8102E" font-size="10" font-weight="800" font-family="Inter,sans-serif">RML</text>
+          <text x="24" y="34" text-anchor="middle" fill="#fff" font-size="5" font-weight="600" font-family="Inter,sans-serif">GROUP</text>
+        </svg>
       </div>
+      <img src="logo.png" alt="" class="brand-logo-img">
+      <div class="brand-text">
+        <div class="brand-title">The Grand Tour</div>
+        <div class="brand-sub">RML Group · HQ to Motor Valley</div>
+      </div>
+      <span id="live-badge" class="live-badge hidden">
+        <span class="live-dot"></span>
+        <span class="live-label">LIVE</span>
+      </span>
     </div>
   </div>
 
-  <div id="title-bar">
-    <div class="title-bar-inner">
-      <span class="title-bar-label">THE GRAND TOURER</span>
-      <span class="title-bar-route">RML Group · UK to Motor Valley</span>
-      <span class="title-bar-date">25 – 30 May 2026</span>
-    </div>
-  </div>
-
-  <div id="timeline-toggle">
-    <svg class="toggle-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M7 10.5L2 5.5L3.5 4L7 7.5L10.5 4L12 5.5L7 10.5Z" fill="white"/>
+  <!-- Mobile toggle (hidden on desktop) -->
+  <button id="timeline-toggle" aria-label="Toggle timeline">
+    <svg class="toggle-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 12L2 5.5L3.5 4L8 8.5L12.5 4L14 5.5L8 12Z" fill="white"/>
     </svg>
-    <span class="toggle-label" id="toggle-label">Journey Timeline</span>
-  </div>
+    <span>Journey Timeline</span>
+  </button>
 
+  <!-- Timeline panel -->
   <div id="timeline-panel">
     <div class="timeline-header">
       <div class="timeline-header-left">
         <h2>The Grand Tour</h2>
-        <p class="timeline-subtitle">RML Group · 25–30 May 2026</p>
+        <p class="timeline-header-sub">25–30 May 2026 · 5 days</p>
       </div>
       <div class="timeline-header-right">
-        <div id="tour-controls">
-          <button id="tour-btn" class="tour-btn" title="Start GPS Tracking">
-            <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>
+        <div class="toolbar-group">
+          <button id="live-share-btn" class="tool-btn" title="Share">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           </button>
-          <div id="tour-info" class="tour-info">
-            <span class="tour-location">GPS off</span>
-            <span id="gps-accuracy" class="tour-pct"></span>
-          </div>
+          <button id="follow-btn" class="tool-btn active" title="Auto-follow">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
+          </button>
+          <button id="broadcast-btn" class="tool-btn" title="Broadcast your location">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
         </div>
-        <button id="timeline-close" aria-label="Close timeline">&times;</button>
+        <div class="toolbar-divider"></div>
+        <button id="tour-btn" class="tool-btn gps-btn" title="Your location">
+          <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="currentColor"/></svg>
+        </button>
+        <div id="tour-info" class="gps-info">GPS off</div>
+        <button id="timeline-close" class="tool-btn close-btn" aria-label="Close">&times;</button>
       </div>
     </div>
+
+    <div id="live-stats" class="live-stats hidden">
+      <span id="stat-driver"></span>
+      <span id="stat-speed"></span>
+      <span id="stat-updated"></span>
+    </div>
+
+    <div id="broadcast-panel" class="broadcast-panel hidden">
+      <div id="broadcast-form-view">
+        <div class="bc-fields">
+          <input type="text" id="broadcast-name" placeholder="Driver name" maxlength="40" autocomplete="off">
+          <select id="broadcast-day">
+            <option value="1">Day 1</option>
+            <option value="2">Day 2</option>
+            <option value="3">Day 3</option>
+            <option value="4" selected>Day 4</option>
+            <option value="5">Day 5</option>
+          </select>
+          <select id="broadcast-status">
+            <option value="driving">Driving</option>
+            <option value="stopped">Stopped</option>
+            <option value="fuel">Fuel</option>
+            <option value="food">Food</option>
+          </select>
+          <button id="broadcast-start-btn" class="bc-btn">Start</button>
+        </div>
+      </div>
+      <div id="broadcast-active-view" class="bc-active hidden">
+        <span class="bc-dot"></span>
+        <span class="bc-label">Broadcasting as <strong id="broadcast-name-display">--</strong></span>
+        <span id="broadcast-active-meta" class="bc-meta"></span>
+        <button id="broadcast-stop-btn" class="bc-btn bc-btn-stop">Stop</button>
+      </div>
+    </div>
+
     <div id="tour-progress"><div id="tour-progress-bar"></div></div>
     <div class="timeline-scroll" id="timeline-scroll"></div>
   </div>
 
+  <div id="drawer-backdrop" class="hidden"></div>
+
   <div id="modal-overlay" class="hidden">
     <div id="modal">
-      <button id="modal-close" aria-label="Close modal">&times;</button>
+      <button id="modal-close">&times;</button>
       <div id="modal-content"></div>
     </div>
   </div>
 
+  <div class="toast" id="live-toast"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-gesture-handling@1.2.2/dist/leaflet-gesture-handling.min.js"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="script.js"></script>
 </body>

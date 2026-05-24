@@ -76,6 +76,17 @@ let isMobile = window.innerWidth <= 768;
 let gpsWatchId = null;
 let gpsTracking = false;
 let gpsAccuracy = null;
+let supabaseClient = null;
+let broadcastActive = false;
+let broadcastData = null;
+let animFrame = null;
+let animLat = 52.3010;
+let animLng = -0.6940;
+let lastSeenInterval = null;
+let autoFollow = true;
+let isBroadcasting = false;
+let broadcastWatchId = null;
+let broadcastLastSent = 0;
 
 function createMarkerIcon(color) {
   return L.divIcon({
@@ -88,12 +99,7 @@ function createMarkerIcon(color) {
 }
 
 function createCarIcon() {
-  const useImg = new Image();
-  useImg.src = 'car.png';
-  const imgExists = document.createElement('img');
-  imgExists.src = 'car.png';
-  let html = `<svg viewBox="0 0 40 24" style="pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6))"><rect x="2" y="8" width="36" height="12" rx="4" fill="#C8102E"/><rect x="8" y="2" width="24" height="10" rx="3" fill="#E31837"/><circle cx="10" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><circle cx="30" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><rect x="16" y="5" width="8" height="5" rx="1" fill="#fff" opacity="0.3"/></svg>`;
-  html = `<div class="car-marker-inner">${html}</div>`;
+  let html = `<div class="car-marker-float"><div class="car-marker-rotate"><svg viewBox="0 0 40 24" style="pointer-events:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.6))"><rect x="2" y="8" width="36" height="12" rx="4" fill="#C8102E"/><rect x="8" y="2" width="24" height="10" rx="3" fill="#E31837"/><circle cx="10" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><circle cx="30" cy="20" r="4" fill="#1a1a1a" stroke="#fff" stroke-width="1.5"/><rect x="16" y="5" width="8" height="5" rx="1" fill="#fff" opacity="0.3"/></svg></div></div>`;
 
   return L.divIcon({
     className: 'car-marker',
@@ -221,10 +227,11 @@ function getDayFromRouteIndex(routeIdx) {
 }
 
 function updateGPSUI(lat, lng, accuracy) {
+  if (broadcastActive) return;
   const info = document.getElementById('tour-info');
   if (info) {
     const pct = accuracy ? Math.round(accuracy) + 'm' : '...';
-    info.innerHTML = `<span class="tour-location">${lat.toFixed(4)}, ${lng.toFixed(4)}</span><span class="tour-pct">±${pct}</span>`;
+    info.innerHTML = `<span class="gps-coords">${lat.toFixed(4)}, ${lng.toFixed(4)}</span><span class="gps-meta">±${pct}</span>`;
   }
 
   const bar = document.getElementById('tour-progress-bar');
@@ -239,14 +246,10 @@ function updateGPSUI(lat, lng, accuracy) {
     if (card) card.classList.toggle('active', i === dayIdx);
   });
   highlightRouteSegment(dayIdx);
-
-  const gpsDot = document.getElementById('gps-accuracy');
-  if (gpsDot && accuracy) {
-    gpsDot.textContent = accuracy < 50 ? 'High' : accuracy < 150 ? 'Medium' : 'Low';
-  }
 }
 
 function gpsSuccess(pos) {
+  if (broadcastActive) return; // broadcast car takes priority
   const { latitude, longitude, accuracy } = pos.coords;
   gpsAccuracy = accuracy;
   carMarker.setLatLng([latitude, longitude]);
@@ -257,22 +260,17 @@ function gpsSuccess(pos) {
 function gpsError(err) {
   const btn = document.getElementById('tour-btn');
   const info = document.getElementById('tour-info');
-  if (err.code === 1) {
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-    btn.title = 'Retry';
-    if (info) info.innerHTML = '<span class="tour-location">GPS blocked</span><span class="tour-pct">Allow location</span>';
-  } else {
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-    btn.title = 'Retry';
-    if (info) info.innerHTML = `<span class="tour-location">GPS error</span><span class="tour-pct">${err.message}</span>`;
-  }
+  const msg = err.code === 1 ? 'GPS blocked · Allow location' : `GPS error · ${err.message}`;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
+  btn.title = 'Retry';
+  if (info) info.innerHTML = `<span class="gps-coords">${msg}</span>`;
   gpsTracking = false;
 }
 
 function startGPSTracking() {
   if (!navigator.geolocation) {
     const info = document.getElementById('tour-info');
-    if (info) info.innerHTML = '<span class="tour-location">GPS not available</span>';
+    if (info) info.innerHTML = '<span class="gps-coords">GPS not available</span>';
     return;
   }
 
@@ -280,7 +278,7 @@ function startGPSTracking() {
   btn.innerHTML = '<div class="gps-pulse"></div>';
   btn.title = 'Tracking GPS...';
   const info = document.getElementById('tour-info');
-  if (info) info.innerHTML = '<span class="tour-location">Requesting GPS...</span>';
+  if (info) info.innerHTML = '<span class="gps-coords">Requesting GPS...</span>';
 
   gpsWatchId = navigator.geolocation.watchPosition(gpsSuccess, gpsError, {
     enableHighAccuracy: true,
@@ -297,10 +295,10 @@ function stopGPSTracking() {
   }
   gpsTracking = false;
   const btn = document.getElementById('tour-btn');
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="white"/></svg>';
-  btn.title = 'Start GPS';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"><polygon points="3,1 13,7 3,13" fill="currentColor"/></svg>';
+  btn.title = 'Your location';
   const info = document.getElementById('tour-info');
-  if (info) info.innerHTML = '<span class="tour-location">GPS off</span>';
+  if (info) info.innerHTML = '<span class="gps-coords">GPS off</span>';
   const bar = document.getElementById('tour-progress-bar');
   if (bar) bar.style.width = '0%';
 }
@@ -313,13 +311,13 @@ function showModal(dayIndex) {
   const content = document.getElementById('modal-content');
 
   content.innerHTML = `
-    <div class="modal-day-badge">
-      <span class="day-number">${day.day}</span>
-      <span class="day-name">${day.name}</span>
+    <div class="modal-badge">
+      <span class="modal-day-num">${day.day}</span>
+      <span class="modal-day-name">${day.name}</span>
     </div>
     <h2 class="modal-title">${day.name}</h2>
     <div class="modal-date">${day.date}</div>
-    <div class="modal-route-info">${day.route}</div>
+    <div class="modal-route">${day.route}</div>
   `;
 
   overlay.classList.remove('hidden');
@@ -406,13 +404,13 @@ function buildTimeline() {
 
     card.innerHTML = `
       <div class="day-card-header">
-        <span class="day-number">${day.day}</span>
-        <div class="day-info">
-          <div class="day-name">${day.name}</div>
-          <div class="day-date">${day.date}</div>
+        <span class="day-card-number">${day.day}</span>
+        <div class="day-card-info">
+          <div class="day-card-name">${day.name}</div>
+          <div class="day-card-date">${day.date}</div>
         </div>
       </div>
-      <div class="day-route">${day.route}</div>
+      <div class="day-card-route">${day.route}</div>
     `;
 
     card.addEventListener('click', () => {
@@ -428,16 +426,19 @@ function buildTimeline() {
 
 function toggleTimeline() {
   const panel = document.getElementById('timeline-panel');
+  const backdrop = document.getElementById('drawer-backdrop');
 
   if (isMobile) {
     timelineVisible = panel.classList.contains('hidden');
 
     if (timelineVisible) {
       panel.classList.remove('hidden');
+      backdrop.classList.add('visible');
       requestAnimationFrame(() => panel.classList.add('expanded'));
     } else {
       panel.classList.remove('expanded');
-      panel.classList.add('hidden');
+      backdrop.classList.remove('visible');
+      setTimeout(() => panel.classList.add('hidden'), 350);
     }
   } else {
     timelineVisible = panel.classList.contains('hidden');
@@ -449,9 +450,11 @@ function toggleTimeline() {
 
 function closeTimeline() {
   const panel = document.getElementById('timeline-panel');
+  const backdrop = document.getElementById('drawer-backdrop');
   if (isMobile) {
     panel.classList.remove('expanded');
-    panel.classList.add('hidden');
+    backdrop.classList.remove('visible');
+    setTimeout(() => panel.classList.add('hidden'), 350);
   } else {
     panel.classList.add('hidden');
   }
@@ -461,8 +464,10 @@ function closeTimeline() {
 
 function openTimeline() {
   const panel = document.getElementById('timeline-panel');
+  const backdrop = document.getElementById('drawer-backdrop');
   if (isMobile) {
     panel.classList.remove('hidden');
+    backdrop.classList.add('visible');
     requestAnimationFrame(() => panel.classList.add('expanded'));
   } else {
     panel.classList.remove('hidden');
@@ -473,6 +478,7 @@ function openTimeline() {
 
 function initResponsive() {
   const panel = document.getElementById('timeline-panel');
+  const backdrop = document.getElementById('drawer-backdrop');
 
   if (isMobile) {
     panel.classList.add('hidden');
@@ -500,14 +506,16 @@ function initResponsive() {
       const diff = touchCurrentY - touchStartY;
       if (diff > 60) {
         panel.classList.remove('expanded');
-        panel.classList.add('hidden');
+        backdrop.classList.remove('visible');
+        setTimeout(() => panel.classList.add('hidden'), 350);
         timelineVisible = false;
       } else if (diff < -60) {
         panel.classList.add('expanded');
       } else {
         if (panel.classList.contains('expanded')) {
           panel.classList.remove('expanded');
-          panel.classList.add('hidden');
+          backdrop.classList.remove('visible');
+          setTimeout(() => panel.classList.add('hidden'), 350);
           timelineVisible = false;
         } else if (!panel.classList.contains('hidden')) {
           panel.classList.add('expanded');
@@ -517,10 +525,11 @@ function initResponsive() {
       touchCurrentY = 0;
     }, { passive: true });
 
-    map.on('click', () => {
-      if (timelineVisible && panel.classList.contains('expanded')) {
-        panel.classList.remove('expanded');
-      }
+    backdrop.addEventListener('click', () => {
+      panel.classList.remove('expanded');
+      backdrop.classList.remove('visible');
+      setTimeout(() => panel.classList.add('hidden'), 350);
+      timelineVisible = false;
     });
   }
 
@@ -546,10 +555,270 @@ function initResponsive() {
   });
 }
 
+// ─── Live GPS Tracking (Supabase) ──────────────────────────────
+
+function initLiveTracking() {
+  if (!CONFIG.supabase.url || !CONFIG.supabase.anonKey) return;
+  if (typeof supabase === 'undefined') return;
+
+  supabaseClient = window.supabase.createClient(CONFIG.supabase.url, CONFIG.supabase.anonKey, {
+    realtime: { heartbeatIntervalMs: 15000 },
+  });
+
+  supabaseClient
+    .channel('live-gps')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'locations' },
+      handleLocationUpdate
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        supabaseClient.from('locations').select('*').limit(1).then(({ data }) => {
+          if (data && data[0]) handleLocationData(data[0]);
+        });
+      }
+    });
+}
+
+function handleLocationUpdate(payload) {
+  handleLocationData(payload.new);
+}
+
+function handleLocationData(data) {
+  if (!data || !data.broadcasting) {
+    hideLiveBadge();
+    hideLiveStats();
+    broadcastActive = false;
+    return;
+  }
+
+  broadcastData = data;
+  broadcastActive = true;
+
+  showLiveBadge(data.driver_name);
+  updateLiveStats(data);
+  startCarAnimation();
+  startLastSeenTimer(data);
+  updateCarHeading(data.heading);
+
+  if (autoFollow) {
+    map.panTo([data.lat, data.lng], { animate: true, duration: 0.5 });
+  }
+
+  if (data.tour_day) {
+    const dayIdx = data.tour_day - 1;
+    DAYS.forEach((d, i) => {
+      const card = document.querySelector(`.day-card[data-day="${i}"]`);
+      if (card) card.classList.toggle('active', i === dayIdx);
+    });
+    highlightRouteSegment(dayIdx);
+  }
+}
+
+function startCarAnimation() {
+  if (!broadcastData) return;
+  if (!animFrame) {
+    function animate() {
+      if (!broadcastData) { animFrame = null; return; }
+
+      const dLat = broadcastData.lat - animLat;
+      const dLng = broadcastData.lng - animLng;
+      const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+      if (dist > 0.00001) {
+        animLat += dLat * 0.12;
+        animLng += dLng * 0.12;
+        carMarker.setLatLng([animLat, animLng]);
+        animFrame = requestAnimationFrame(animate);
+      } else {
+        animLat = broadcastData.lat;
+        animLng = broadcastData.lng;
+        carMarker.setLatLng([animLat, animLng]);
+        animFrame = null;
+      }
+    }
+    animate();
+  }
+  updateCarHeading(broadcastData.heading);
+}
+
+function updateCarHeading(heading) {
+  if (!carMarker || heading === null || heading === undefined) return;
+  const el = carMarker.getElement();
+  if (!el) return;
+  const rotateEl = el.querySelector('.car-marker-rotate');
+  if (rotateEl) rotateEl.style.transform = `rotate(${heading - 90}deg)`;
+}
+
+function showLiveBadge(driverName) {
+  const badge = document.getElementById('live-badge');
+  if (badge) badge.classList.remove('hidden');
+  const stats = document.getElementById('live-stats');
+  if (stats) stats.classList.remove('hidden');
+}
+
+function hideLiveBadge() {
+  const badge = document.getElementById('live-badge');
+  if (badge) badge.classList.add('hidden');
+}
+
+function hideLiveStats() {
+  const stats = document.getElementById('live-stats');
+  if (stats) stats.classList.add('hidden');
+}
+
+function updateLiveStats(data) {
+  const driverEl = document.getElementById('stat-driver');
+  const speedEl = document.getElementById('stat-speed');
+  const updatedEl = document.getElementById('stat-updated');
+
+  if (driverEl) {
+    driverEl.innerHTML = `<span class="stats-icon">🚗</span> ${data.driver_name || 'Driver'}`;
+  }
+  if (speedEl) {
+    const speed = data.speed ? `${Math.round(data.speed * 3.6)} km/h` : '0 km/h';
+    speedEl.textContent = speed;
+  }
+}
+
+function startLastSeenTimer(data) {
+  if (lastSeenInterval) clearInterval(lastSeenInterval);
+  lastSeenInterval = setInterval(() => {
+    const el = document.getElementById('stat-updated');
+    if (!el || !broadcastData) return;
+    const now = Date.now();
+    const then = new Date(broadcastData.timestamp).getTime();
+    const secs = Math.round((now - then) / 1000);
+    if (secs < 5) el.textContent = 'Just now';
+    else if (secs < 60) el.textContent = `${secs}s ago`;
+    else if (secs < 3600) el.textContent = `${Math.floor(secs / 60)}m ago`;
+    else el.textContent = `${Math.floor(secs / 3600)}h ago`;
+  }, 1000);
+}
+
+// ─── Local Broadcast (integrated into main page) ──────────────
+
+function showBroadcastPanel() {
+  document.getElementById('broadcast-panel').classList.remove('hidden');
+  const saved = localStorage.getItem('rml_driver_name');
+  if (saved) document.getElementById('broadcast-name').value = saved;
+  document.getElementById('broadcast-name').focus();
+}
+
+function hideBroadcastPanel() {
+  if (isBroadcasting) return;
+  document.getElementById('broadcast-panel').classList.add('hidden');
+}
+
+function startBroadcast() {
+  if (!navigator.geolocation) {
+    showToast('GPS not available');
+    return;
+  }
+
+  const name = document.getElementById('broadcast-name').value.trim();
+  if (!name) {
+    document.getElementById('broadcast-name').focus();
+    document.getElementById('broadcast-name').style.borderColor = '#C8102E';
+    setTimeout(() => document.getElementById('broadcast-name').style.borderColor = '', 2000);
+    showToast('Enter your name first');
+    return;
+  }
+
+  localStorage.setItem('rml_driver_name', name);
+
+  broadcastWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      broadcastLastSent = 0;
+      sendBroadcastLocation(pos);
+    },
+    err => {
+      console.error('Broadcast GPS error:', err.message);
+      if (err.code === 1) showToast('Location permission denied');
+      else showToast('GPS error: ' + err.message);
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 3000 }
+  );
+
+  isBroadcasting = true;
+
+  document.getElementById('broadcast-form-view').classList.add('hidden');
+  document.getElementById('broadcast-active-view').classList.remove('hidden');
+  document.getElementById('broadcast-name-display').textContent = name;
+  document.getElementById('broadcast-btn').classList.add('active');
+  document.getElementById('broadcast-btn').title = 'Stop broadcasting';
+  showBroadcastPanel();
+}
+
+function stopBroadcast() {
+  if (broadcastWatchId !== null) {
+    navigator.geolocation.clearWatch(broadcastWatchId);
+    broadcastWatchId = null;
+  }
+
+  isBroadcasting = false;
+
+  document.getElementById('broadcast-form-view').classList.remove('hidden');
+  document.getElementById('broadcast-active-view').classList.add('hidden');
+  document.getElementById('broadcast-btn').classList.remove('active');
+  document.getElementById('broadcast-btn').title = 'Broadcast your location';
+
+  if (supabaseClient) {
+    supabaseClient
+      .from('locations')
+      .update({ broadcasting: false, timestamp: new Date().toISOString() })
+      .eq('id', 1)
+      .then(() => {});
+  }
+
+  hideBroadcastPanel();
+}
+
+function sendBroadcastLocation(pos) {
+  const now = Date.now();
+  if (now - broadcastLastSent < 2000) return;
+  broadcastLastSent = now;
+
+  const { latitude, longitude, accuracy, heading, speed } = pos.coords;
+  const name = document.getElementById('broadcast-name').value.trim() || 'Driver';
+  const tourDay = parseInt(document.getElementById('broadcast-day').value);
+  const status = document.getElementById('broadcast-status').value;
+
+  document.getElementById('broadcast-active-meta').textContent =
+    `${latitude.toFixed(4)}, ${longitude.toFixed(4)} · ${speed ? Math.round(speed * 3.6) + ' km/h' : '0 km/h'}`;
+
+  supabaseClient
+    .from('locations')
+    .upsert({
+      id: 1,
+      driver_name: name,
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy || null,
+      heading: heading || null,
+      speed: speed || null,
+      timestamp: new Date().toISOString(),
+      tour_day: tourDay,
+      status: status,
+      broadcasting: true,
+    })
+    .then(({ error }) => {
+      if (error) console.error('Supabase error:', error);
+    });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('live-toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
   buildTimeline();
   initResponsive();
+  initLiveTracking();
 
   document.getElementById('modal-close').addEventListener('click', hideModal);
   document.getElementById('modal-overlay').addEventListener('click', (e) => {
@@ -567,6 +836,70 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         startGPSTracking();
       }
+    });
+  }
+
+  const shareBtn = document.getElementById('live-share-btn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      const url = window.location.href;
+      if (navigator.share) {
+        navigator.share({ title: 'RML Group - The Grand Tour', url: url });
+      } else {
+        navigator.clipboard.writeText(url).then(() => {
+          const toast = document.getElementById('live-toast') || (() => {
+            const t = document.createElement('div');
+            t.id = 'live-toast';
+            t.className = 'toast';
+            document.body.appendChild(t);
+            return t;
+          })();
+          toast.textContent = 'Link copied!';
+          toast.className = 'toast show';
+          setTimeout(() => toast.className = 'toast', 2500);
+        });
+      }
+    });
+  }
+
+  const followBtn = document.getElementById('follow-btn');
+  if (followBtn) {
+    followBtn.addEventListener('click', () => {
+      autoFollow = !autoFollow;
+      followBtn.classList.toggle('active', autoFollow);
+      if (autoFollow && broadcastData) {
+        map.panTo([broadcastData.lat, broadcastData.lng], { animate: true, duration: 0.5 });
+      }
+    });
+  }
+
+  const broadcastBtn = document.getElementById('broadcast-btn');
+  const broadcastPanel = document.getElementById('broadcast-panel');
+  if (broadcastBtn && broadcastPanel) {
+    broadcastBtn.addEventListener('click', () => {
+      if (isBroadcasting) {
+        stopBroadcast();
+      } else {
+        if (isMobile) {
+          const panel = document.getElementById('timeline-panel');
+          if (panel.classList.contains('hidden')) {
+            openTimeline();
+          }
+        }
+        broadcastPanel.classList.toggle('hidden');
+        if (!broadcastPanel.classList.contains('hidden')) {
+          const saved = localStorage.getItem('rml_driver_name');
+          if (saved) document.getElementById('broadcast-name').value = saved;
+          document.getElementById('broadcast-name').focus();
+        }
+      }
+    });
+
+    document.getElementById('broadcast-start-btn').addEventListener('click', startBroadcast);
+    document.getElementById('broadcast-stop-btn').addEventListener('click', stopBroadcast);
+
+    document.getElementById('broadcast-name').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') startBroadcast();
     });
   }
 
