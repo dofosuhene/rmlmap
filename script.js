@@ -1,15 +1,15 @@
 const LOCATIONS = [
-  { id: 'hq', name: 'RML Group HQ', lat: 52.3010, lng: -0.6940, route: 'A' },
-  { id: 'calais', name: 'Calais', lat: 50.9513, lng: 1.8587, route: 'A' },
-  { id: 'lemans', name: 'Le Mans', lat: 47.9986, lng: 0.2022, route: 'A' },
-  { id: 'geneva', name: 'Geneva', lat: 46.2044, lng: 6.1432, route: 'A' },
-  { id: 'turin', name: 'Turin', lat: 45.0703, lng: 7.6869, route: 'A' },
-  { id: 'como', name: 'Lake Como', lat: 45.8081, lng: 9.0852, route: 'A' },
-  { id: 'monza', name: 'Monza Circuit', lat: 45.6156, lng: 9.2811, route: 'A' },
-  { id: 'milan', name: 'Milan', lat: 45.4642, lng: 9.1900, route: 'A' },
-  { id: 'modena', name: 'Modena', lat: 44.6471, lng: 10.9252, route: 'A' },
-  { id: 'bologna', name: 'Bologna', lat: 44.4949, lng: 11.3426, route: 'B' },
-  { id: 'stelvio', name: 'Stelvio Pass', lat: 46.5271, lng: 10.4525, route: 'B' },
+  { id: 'hq', name: 'RML Group HQ', flag: '🇬🇧', lat: 52.3010, lng: -0.6940, route: 'A' },
+  { id: 'calais', name: 'Calais', flag: '🇫🇷', lat: 50.9513, lng: 1.8587, route: 'A' },
+  { id: 'lemans', name: 'Le Mans', flag: '🇫🇷', lat: 47.9986, lng: 0.2022, route: 'A' },
+  { id: 'geneva', name: 'Geneva', flag: '🇨🇭', lat: 46.2044, lng: 6.1432, route: 'A' },
+  { id: 'turin', name: 'Turin', flag: '🇮🇹', lat: 45.0703, lng: 7.6869, route: 'A' },
+  { id: 'como', name: 'Lake Como', flag: '🇮🇹', lat: 45.8081, lng: 9.0852, route: 'A' },
+  { id: 'monza', name: 'Monza Circuit', flag: '🇮🇹', lat: 45.6156, lng: 9.2811, route: 'A' },
+  { id: 'milan', name: 'Milan', flag: '🇮🇹', lat: 45.4642, lng: 9.1900, route: 'A' },
+  { id: 'modena', name: 'Modena', flag: '🇮🇹', lat: 44.6471, lng: 10.9252, route: 'A' },
+  { id: 'bologna', name: 'Bologna', flag: '🇮🇹', lat: 44.4949, lng: 11.3426, route: 'B' },
+  { id: 'stelvio', name: 'Stelvio Pass', flag: '🇮🇹', lat: 46.5271, lng: 10.4525, route: 'B' },
 ];
 
 const ROUTE_A_COORDS = [
@@ -36,32 +36,32 @@ const ROUTE_B_COORDS = [
 const DAYS = [
   {
     day: 1, date: 'Monday, 25th May', name: 'The Departure',
-    route: 'RML HQ, Wellingborough → Channel Tunnel → Calais → Le Mans, France',
+    route: '🇬🇧 RML HQ, Wellingborough → 🇫🇷 Calais → 🇫🇷 Le Mans, France',
     locations: ['hq', 'calais', 'lemans'],
     zoom: [50.5, 0.5], zoomLevel: 6,
   },
   {
     day: 2, date: 'Tuesday, 26th May', name: 'Through France',
-    route: 'Le Mans → Turin, Italy',
+    route: '🇫🇷 Le Mans → 🇮🇹 Turin, Italy',
     locations: ['lemans', 'turin'],
     zoom: [45.8, 5.5], zoomLevel: 6,
   },
   {
     day: 3, date: 'Wednesday, 27th May', name: 'Arrival in Modena',
-    route: 'Turin → Modena, Italy',
+    route: '🇮🇹 Turin → 🇮🇹 Modena, Italy',
     locations: ['turin', 'como', 'monza', 'milan', 'modena'],
     zoom: [45.2, 9.2], zoomLevel: 7,
   },
   {
     day: 4, date: 'Thursday 28th – Friday 29th May', name: 'Motor Valley Fest',
-    route: 'Stay in Modena — Motorsport Club Exhibition',
+    route: '🇮🇹 Modena — Motorsport Club Exhibition',
     locations: ['modena'],
     zoom: [44.647, 10.925], zoomLevel: 13,
     isModena: true,
   },
   {
     day: 5, date: 'Saturday, 30th May', name: 'The Ultimate Driving Road',
-    route: 'Modena → Bologna → Stelvio Pass',
+    route: '🇮🇹 Modena → 🇮🇹 Bologna → 🇮🇹 Stelvio Pass',
     locations: ['modena', 'bologna', 'stelvio'],
     zoom: [45.5, 10.8], zoomLevel: 7,
   },
@@ -182,7 +182,7 @@ function addMarkers() {
       className: 'location-label',
       opacity: 0.7,
     });
-    label.setContent(loc.name);
+    label.setContent(loc.flag + ' ' + loc.name);
     marker.bindTooltip(label);
 
     marker.on('click', () => {
